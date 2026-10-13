@@ -1,65 +1,23 @@
-# Google Drive CLI & WebDAV Mount
+# Google Drive WebDAV Mount
 
-A lightweight CLI tool to mount Google Drive ("My Drive" and "Shared with me") as a local Windows drive or WebDAV server.
+Google Drive("내 드라이브" 및 "공유 문서함")를 Windows 로컬 드라이브(`G:`)로 마운트합니다.
 
-## Quickstart
+## 1. 사전 준비 (Credentials)
 
-### 1. Credentials
-Download your OAuth 2.0 client credentials (`client_secrets.json`) from [Google Cloud Console](https://console.cloud.google.com/) and save it to:
+Google Cloud Console에서 다운로드한 OAuth 클라이언트 자격 증명(`client_secrets.json`)을 아래 경로에 저장합니다:
 - `%USERPROFILE%\.config\google-drive\client_secrets.json`
 
-*(Generated tokens will also be saved to `token.json` in the same directory.)*
+## 2. 사용 방법
 
-### 2. Install
-```cmd
-.\install.bat
-
-# Or via uv directly
-uv tool install --force .
-```
-
-### 3. Mount
-```bash
-# Mount to G: drive (default)
-google-drive mount
-
-# Or specify a drive letter
-google-drive mount Z:
-```
+| 작업 | 명령 | 설명 |
+| :--- | :--- | :--- |
+| **설치** | `install.bat` | 도구 설치 (`uv tool`) |
+| **상태 체크** | `status.bat` | API 연결 및 마운트 상태 확인 |
+| **마운트** | `mount.bat` | `G:` 드라이브로 마운트 |
+| **마운트 해제** | `umount.bat` | `G:` 드라이브 마운트 해제 |
 
 ---
 
-## Usage
-
-| Command | Description |
-| :--- | :--- |
-| `google-drive mount [DRIVE]` | Mount drive (default: `G:`, use `-f` to force remount, `--port` or `-p` for custom port) |
-| `google-drive status [-j]` | Check API connection and mount status (supports `--json`) |
-| `google-drive umount [DRIVE]` | Unmount drive |
-| `google-drive dir [PATH]` | List files in `ls -l` format (`list` is an alias) |
-| `google-drive auth [-f]` | Verify or force OAuth authentication |
-
-### Examples
-
-```bash
-# Mount with a custom port
-google-drive mount G: --port 18875
-
-# Check status in JSON format
-google-drive status --json
-
-# Unmount
-google-drive umount G:
-
-# List root or shared folder
-google-drive dir
-google-drive dir "Shared with me"
-google-drive dir "Projects" -n 50
-```
-
----
-
-## Windows WebDAV Setup & 4GB Limit Fix
-
-Windows WebClient blocks unencrypted HTTP WebDAV by default and limits file transfers to ~50 MB.
-Run `fix-FileSizelimitInBytes-and-restart-WebClient.bat` as Administrator to enable HTTP drive mounting (`BasicAuthLevel=2`) and raise the file limit to 4GB.
+### 참고: Windows WebDAV 전송 제한 해제
+Windows 기본 파일 전송 제한(~50MB)을 4GB로 확장하고 HTTP 마운트를 허용하려면, 관리자 권한으로 1회 실행합니다:
+- `scripts\fix-FileSizelimitInBytes-and-restart-WebClient.bat`
