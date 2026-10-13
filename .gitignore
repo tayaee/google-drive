@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+
+# Secrets and OAuth Tokens
+client_secrets.json
+token.json
+token.json.*
+
+# Cache and temporary
+.uv-cache/
+.pytest_cache/
