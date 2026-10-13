@@ -33,8 +33,8 @@ google-drive mount Z:
 
 | Command | Description |
 | :--- | :--- |
-| `google-drive mount [DRIVE]` | Mount drive (default: `G:`, use `-f` to force remount) |
-| `google-drive status` | Check API connection and mount status |
+| `google-drive mount [DRIVE]` | Mount drive (default: `G:`, use `-f` to force remount, `--port` or `-p` for custom port) |
+| `google-drive status [-j]` | Check API connection and mount status (supports `--json`) |
 | `google-drive umount [DRIVE]` | Unmount drive |
 | `google-drive dir [PATH]` | List files in `ls -l` format (`list` is an alias) |
 | `google-drive auth [-f]` | Verify or force OAuth authentication |
@@ -42,9 +42,11 @@ google-drive mount Z:
 ### Examples
 
 ```bash
-# Mount with a custom port or without drive letter mapping
-google-drive mount G: -p 18875
-google-drive mount --no-drive
+# Mount with a custom port
+google-drive mount G: --port 18875
+
+# Check status in JSON format
+google-drive status --json
 
 # Unmount
 google-drive umount G:

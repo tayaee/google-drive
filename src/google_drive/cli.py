@@ -14,6 +14,13 @@ from googleapiclient.discovery import build
 from google_drive.auth import SCOPES, backup_expired_token, get_credentials
 from google_drive.client import GoogleDriveClient
 from google_drive.config import resolve_auth_paths
+from google_drive.models import (
+    ApiStatus,
+    GoogleDriveStatus,
+    MountInfo,
+    MountStatus,
+    MyDriveSummary,
+)
 from google_drive.mount import (
     clear_mount_state,
     get_active_mounts,
@@ -57,8 +64,66 @@ def format_ls_l_entry(item: Dict[str, Any]) -> str:
     return f"{mode_str} 1 user group {size_str} {dt_str} {name_display}"
 
 
+def get_drive_status(secrets_file: str, token_file: str) -> GoogleDriveStatus:
+    """Collect API and mount status into a Pydantic GoogleDriveStatus model."""
+    # 1. Google Drive API & My Drive summary
+    try:
+        client = GoogleDriveClient(secrets_file, token_file)
+        summary_raw = client.get_my_drive_summary()
+        api_info = ApiStatus(
+            connected=True,
+            status="Connected",
+            error=None,
+            my_drive=MyDriveSummary(
+                folders=summary_raw.get("folders", 0),
+                files=summary_raw.get("files", 0),
+                total=summary_raw.get("total", 0),
+            ),
+        )
+    except Exception as e:
+        api_info = ApiStatus(
+            connected=False,
+            status=f"Error ({e})",
+            error=str(e),
+            my_drive=None,
+        )
+
+    # 2. Mount status
+    active_mounts = get_active_mounts()
+    mount_list = []
+    for m in active_mounts:
+        drive = m.get("drive_letter", "Unknown")
+        port = m.get("port")
+        pid = m.get("pid")
+        url = m.get("webdav_url", f"http://127.0.0.1:{port}/" if port else "")
+        mount_list.append(
+            MountInfo(
+                drive_letter=drive,
+                drive_path=f"{drive}\\",
+                webdav_url=url,
+                pid=pid,
+                port=port,
+            )
+        )
+
+    mount_info = MountStatus(
+        is_mounted=len(mount_list) > 0,
+        mounts=mount_list,
+    )
+
+    return GoogleDriveStatus(api=api_info, mount=mount_info)
+
+
 def cmd_status(args: argparse.Namespace) -> None:
     secrets_file, token_file = resolve_auth_paths(args.secrets_file, args.token_file)
+
+    if getattr(args, "json", False):
+        import contextlib
+        # Redirect progress prints to stderr so stdout is strictly clean JSON
+        with contextlib.redirect_stdout(sys.stderr):
+            status_obj = get_drive_status(secrets_file, token_file)
+        print(status_obj.model_dump_json(indent=2))
+        return
 
     print("=" * 60)
     print(" Google Drive Status")
@@ -124,7 +189,7 @@ def cmd_mount(args: argparse.Namespace) -> None:
             except Exception:
                 clear_mount_state(drive_letter)
 
-        if not already_running and not args.no_drive and os.path.exists(f"{drive_letter}\\"):
+        if not already_running and os.path.exists(f"{drive_letter}\\"):
             already_running = True
 
         if already_running:
@@ -147,8 +212,6 @@ def cmd_mount(args: argparse.Namespace) -> None:
             cmd.extend(["-p", str(args.port)])
         if args.force:
             cmd.append("-f")
-        if args.no_drive:
-            cmd.append("--no-drive")
         if args.secrets_file:
             cmd.extend(["-s", args.secrets_file])
         if args.token_file:
@@ -166,7 +229,6 @@ def cmd_mount(args: argparse.Namespace) -> None:
     start_mount(
         drive_letter=drive_letter,
         port=args.port,
-        no_drive=args.no_drive,
         force=args.force,
         secrets_file=secrets_file,
         token_file=token_file,
@@ -267,21 +329,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run mount in the foreground of the current console (do not open a new window).",
     )
     mount_parser.add_argument(
-        "--no-drive",
-        action="store_true",
-        help="Do not map a Windows drive letter; run WebDAV server only.",
-    )
-    mount_parser.add_argument(
         "-s", "--secrets-file",
         type=str,
         default=None,
-        help="Path to client_secrets.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to client_secrets.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
     mount_parser.add_argument(
         "-t", "--token-file",
         type=str,
         default=None,
-        help="Path to token.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to token.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
 
     # umount
@@ -311,13 +368,13 @@ def build_parser() -> argparse.ArgumentParser:
         "-s", "--secrets-file",
         type=str,
         default=None,
-        help="Path to client_secrets.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to client_secrets.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
     dir_parser.add_argument(
         "-t", "--token-file",
         type=str,
         default=None,
-        help="Path to token.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to token.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
 
     # list (alias for dir)
@@ -338,13 +395,13 @@ def build_parser() -> argparse.ArgumentParser:
         "-s", "--secrets-file",
         type=str,
         default=None,
-        help="Path to client_secrets.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to client_secrets.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
     list_parser.add_argument(
         "-t", "--token-file",
         type=str,
         default=None,
-        help="Path to token.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to token.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
 
     # auth
@@ -358,13 +415,13 @@ def build_parser() -> argparse.ArgumentParser:
         "-s", "--secrets-file",
         type=str,
         default=None,
-        help="Path to client_secrets.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to client_secrets.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
     auth_parser.add_argument(
         "-t", "--token-file",
         type=str,
         default=None,
-        help="Path to token.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to token.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
 
     # status
@@ -373,13 +430,18 @@ def build_parser() -> argparse.ArgumentParser:
         "-s", "--secrets-file",
         type=str,
         default=None,
-        help="Path to client_secrets.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to client_secrets.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
     )
     status_parser.add_argument(
         "-t", "--token-file",
         type=str,
         default=None,
-        help="Path to token.json (default: %USERPROFILE%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+        help="Path to token.json (default: %%USERPROFILE%%\\.config\\google-drive\\ or ~/.config/google-drive/)",
+    )
+    status_parser.add_argument(
+        "-j", "--json",
+        action="store_true",
+        help="Output status in JSON format",
     )
 
     return parser

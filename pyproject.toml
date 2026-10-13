@@ -15,6 +15,7 @@ dependencies = [
     "wsgidav>=4.3.0",
     "cheroot>=10.0.0",
     "requests>=2.28.0",
+    "pydantic>=2.0.0",
 ]
 
 [project.scripts]

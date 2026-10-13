@@ -228,7 +228,6 @@ def is_pid_alive(pid: int) -> bool:
 def start_mount(
     drive_letter: Optional[str] = "G:",
     port: Optional[int] = None,
-    no_drive: bool = False,
     force: bool = False,
     secrets_file: Optional[str] = None,
     token_file: Optional[str] = None,
@@ -258,7 +257,7 @@ def start_mount(
         except Exception:
             clear_mount_state(drive_letter)
 
-    if not already_running and os.name == "nt" and not no_drive:
+    if not already_running and os.name == "nt":
         if os.path.exists(f"{drive_letter}\\"):
             already_running = True
 
@@ -331,7 +330,7 @@ def start_mount(
     mounted_success = False
 
     # Mount Windows drive
-    if os.name == "nt" and not no_drive:
+    if os.name == "nt":
         check_windows_webclient_settings()
         if mount_windows_drive(drive_letter, webdav_url):
             mounted_success = True
