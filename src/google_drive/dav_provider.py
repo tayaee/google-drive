@@ -7,7 +7,12 @@ from typing import Any, Dict, List, Optional
 from wsgidav import util
 from wsgidav.dav_provider import DAVCollection, DAVNonCollection, DAVProvider
 
-from google_drive.client import FOLDER_MIME_TYPE, GOOGLE_DOCS_EXPORT_MAP, GoogleDriveClient
+from google_drive.client import (
+    FOLDER_MIME_TYPE,
+    GOOGLE_DOCS_EXPORT_MAP,
+    GoogleDriveClient,
+    sanitize_filename,
+)
 
 logger = logging.getLogger("google_drive.dav")
 
@@ -118,7 +123,9 @@ class GoogleDriveDAVProvider(DAVProvider):
 
         matched_item = None
         for item in shared_items:
-            if item.get("display_name") == top_name or item.get("name") == top_name:
+            disp = item.get("display_name", "")
+            raw = item.get("name", "")
+            if disp == top_name or raw == top_name or sanitize_filename(raw) == top_name:
                 matched_item = item
                 break
 
@@ -169,7 +176,9 @@ class GoogleDriveDAVProvider(DAVProvider):
 
             found = None
             for item in items:
-                if item.get("display_name") == seg or item.get("name") == seg:
+                disp = item.get("display_name", "")
+                raw = item.get("name", "")
+                if disp == seg or raw == seg or sanitize_filename(raw) == seg:
                     found = item
                     break
 
@@ -268,6 +277,37 @@ class SharedWithMeResource(DAVCollection):
         child_path = util.join_uri(self.path, name)
         return self.provider.get_resource_inst(child_path, self.environ)
 
+    def get_member_list(self) -> List[Any]:
+        """Directly construct member resources to guarantee no missing members and maximize performance."""
+        try:
+            items = self.provider.drive_client.list_shared_with_me()
+        except Exception as e:
+            logger.warning(f"Failed to list Shared with me member list: {e}")
+            return []
+
+        members = []
+        for item in items:
+            name = item.get("display_name", item["name"])
+            child_path = util.join_uri(self.path, name)
+            if item.get("mimeType") == FOLDER_MIME_TYPE:
+                res = GDriveFolderResource(
+                    path=child_path,
+                    environ=self.environ,
+                    provider=self.provider,
+                    folder_id=item["id"],
+                    display_name=name,
+                    modified_time=parse_rfc3339_to_epoch(item.get("modifiedTime")),
+                )
+            else:
+                res = GDriveFileResource(
+                    path=child_path,
+                    environ=self.environ,
+                    provider=self.provider,
+                    item=item,
+                )
+            members.append(res)
+        return members
+
 
 class GDriveFolderResource(DAVCollection):
     """Represents a standard Google Drive directory/folder."""
@@ -309,6 +349,37 @@ class GDriveFolderResource(DAVCollection):
     def get_member(self, name: str) -> Optional[Any]:
         child_path = util.join_uri(self.path, name)
         return self.provider.get_resource_inst(child_path, self.environ)
+
+    def get_member_list(self) -> List[Any]:
+        """Directly construct member resources to guarantee no missing members and maximize performance."""
+        try:
+            items = self.provider.drive_client.list_folder(self.folder_id)
+        except Exception as e:
+            logger.warning(f"get_member_list error: {e}")
+            return []
+
+        members = []
+        for item in items:
+            name = item.get("display_name", item["name"])
+            child_path = util.join_uri(self.path, name)
+            if item.get("mimeType") == FOLDER_MIME_TYPE:
+                res = GDriveFolderResource(
+                    path=child_path,
+                    environ=self.environ,
+                    provider=self.provider,
+                    folder_id=item["id"],
+                    display_name=name,
+                    modified_time=parse_rfc3339_to_epoch(item.get("modifiedTime")),
+                )
+            else:
+                res = GDriveFileResource(
+                    path=child_path,
+                    environ=self.environ,
+                    provider=self.provider,
+                    item=item,
+                )
+            members.append(res)
+        return members
 
 
 class GDriveFileResource(DAVNonCollection):

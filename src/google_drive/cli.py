@@ -12,7 +12,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 from google_drive.auth import SCOPES, backup_expired_token, get_credentials
-from google_drive.client import GoogleDriveClient
+from google_drive.client import GoogleDriveClient, sanitize_filename
 from google_drive.config import resolve_auth_paths
 from google_drive.models import (
     ApiStatus,
@@ -244,18 +244,65 @@ def cmd_dir(args: argparse.Namespace) -> None:
     client = GoogleDriveClient(secrets_file, token_file)
 
     remote_path = (args.remote_path or "").strip().strip("/").replace("\\", "/")
+    lower_path = remote_path.lower()
 
-    if remote_path.lower() in ("shared with me", "shared_with_me"):
+    # Normalize 'My Drive' prefix
+    if lower_path in ("my drive", "my_drive"):
+        remote_path = ""
+        lower_path = ""
+    elif lower_path.startswith("my drive/"):
+        remote_path = remote_path[9:].strip("/")
+        lower_path = remote_path.lower()
+    elif lower_path.startswith("my_drive/"):
+        remote_path = remote_path[9:].strip("/")
+        lower_path = remote_path.lower()
+
+    if lower_path in ("shared with me", "shared_with_me"):
         items = client.list_shared_with_me()
         display_title = "Shared with me"
+    elif lower_path.startswith("shared with me/") or lower_path.startswith("shared_with_me/"):
+        subpath = remote_path.split("/", 1)[1].strip("/")
+        segments = [s for s in subpath.split("/") if s]
+        try:
+            shared_items = client.list_shared_with_me()
+            top_seg = segments[0]
+            matched = None
+            for it in shared_items:
+                disp = it.get("display_name", "")
+                raw = it.get("name", "")
+                if disp == top_seg or raw == top_seg or sanitize_filename(raw) == top_seg:
+                    matched = it
+                    break
+            if not matched:
+                raise FileNotFoundError(f"Shared folder '{top_seg}' not found")
+
+            curr_id = matched["id"]
+            for seg in segments[1:]:
+                sub_items = client.list_folder(curr_id)
+                found = None
+                for it in sub_items:
+                    disp = it.get("display_name", "")
+                    raw = it.get("name", "")
+                    if disp == seg or raw == seg or sanitize_filename(raw) == seg:
+                        found = it
+                        break
+                if not found:
+                    raise FileNotFoundError(f"Subfolder '{seg}' not found in '{curr_id}'")
+                curr_id = found["id"]
+
+            items = client.list_folder(curr_id)
+            display_title = remote_path
+        except Exception as e:
+            print(f"[!] Path error: {e}")
+            sys.exit(1)
     else:
         try:
-            folder_id = client.resolve_path(args.remote_path)
+            folder_id = client.resolve_path(remote_path)
         except Exception as e:
             print(f"[!] Path error: {e}")
             sys.exit(1)
 
-        display_title = args.remote_path or "My Drive"
+        display_title = remote_path or "My Drive"
         items = client.list_folder(folder_id)
 
     if not items:

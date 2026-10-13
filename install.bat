@@ -16,7 +16,8 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [*] Installing google-drive as uv tool...
-uv tool install --force --reinstall .
+echo + uv tool install --force --reinstall . -e
+uv tool install --force --reinstall . -e
 
 if %ERRORLEVEL% EQU 0 (
     echo.

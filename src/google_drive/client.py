@@ -28,9 +28,46 @@ GOOGLE_DOCS_EXPORT_MAP: Dict[str, Tuple[str, str]] = {
     "application/vnd.google-apps.drawing": ("application/pdf", ".pdf"),
 }
 
+# Windows forbidden characters mapped to Unicode fullwidth look-alikes
+WINDOWS_FORBIDDEN_CHAR_MAP: Dict[str, str] = {
+    "/": "／",   # U+FF0F Fullwidth Solidus
+    "\\": "＼",  # U+FF3C Fullwidth Reverse Solidus
+    ":": "：",   # U+FF1A Fullwidth Colon
+    "*": "＊",   # U+FF0A Fullwidth Asterisk
+    "?": "？",   # U+FF1F Fullwidth Question Mark
+    '"': "＂",   # U+FF02 Fullwidth Quotation Mark
+    "<": "＜",   # U+FF1C Fullwidth Less-Than Sign
+    ">": "＞",   # U+FF1E Fullwidth Greater-Than Sign
+    "|": "｜",   # U+FF5C Fullwidth Vertical Line
+}
+
+REVERSE_WINDOWS_CHAR_MAP: Dict[str, str] = {
+    v: k for k, v in WINDOWS_FORBIDDEN_CHAR_MAP.items()
+}
+
+
+def sanitize_filename(name: str) -> str:
+    """Sanitize filename by mapping Windows-forbidden characters to fullwidth look-alikes."""
+    if not name:
+        return "Untitled"
+    for forbidden, replacement in WINDOWS_FORBIDDEN_CHAR_MAP.items():
+        if forbidden in name:
+            name = name.replace(forbidden, replacement)
+    return name
+
+
+def restore_filename(name: str) -> str:
+    """Restore sanitized filename back to its original characters."""
+    if not name:
+        return name
+    for replacement, original in REVERSE_WINDOWS_CHAR_MAP.items():
+        if replacement in name:
+            name = name.replace(replacement, original)
+    return name
+
 
 def make_unique_names(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Deduplicate names and append appropriate extensions for Google Docs."""
+    """Deduplicate names, sanitize Windows forbidden characters, and append extensions for Google Docs."""
     name_counts: Dict[str, int] = {}
     result = []
 
@@ -39,22 +76,25 @@ def make_unique_names(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         raw_name = item_copy.get("name", "Untitled")
         mime = item_copy.get("mimeType", "")
 
-        # Append extension for Google Docs if not present
+        # 1. Sanitize Windows forbidden characters (e.g. '/' -> '／')
+        sanitized_name = sanitize_filename(raw_name)
+
+        # 2. Append extension for Google Docs if not present
         if mime in GOOGLE_DOCS_EXPORT_MAP:
             _, ext = GOOGLE_DOCS_EXPORT_MAP[mime]
-            if not raw_name.lower().endswith(ext):
-                raw_name = f"{raw_name}{ext}"
+            if not sanitized_name.lower().endswith(ext):
+                sanitized_name = f"{sanitized_name}{ext}"
 
-        # Deduplicate
-        lower_name = raw_name.lower()
+        # 3. Deduplicate
+        lower_name = sanitized_name.lower()
         if lower_name in name_counts:
             name_counts[lower_name] += 1
             count = name_counts[lower_name]
-            stem, ext = os.path.splitext(raw_name)
+            stem, ext = os.path.splitext(sanitized_name)
             unique_name = f"{stem} ({count}){ext}"
         else:
             name_counts[lower_name] = 1
-            unique_name = raw_name
+            unique_name = sanitized_name
 
         item_copy["display_name"] = unique_name
         result.append(item_copy)

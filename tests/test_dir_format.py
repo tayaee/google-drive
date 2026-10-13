@@ -43,3 +43,56 @@ def test_format_ls_l_entry_file():
     assert "1048576" in line
     assert "report.pdf" in line
     assert not line.endswith("/")
+
+
+def test_cmd_dir_shared_with_me_subpath(capsys):
+    import argparse
+    from unittest.mock import patch
+    from google_drive.cli import cmd_dir
+
+    with patch("google_drive.cli.GoogleDriveClient") as mock_client_cls:
+        client = mock_client_cls.return_value
+        client.list_shared_with_me.return_value = [
+            {"id": "shared-f1", "name": "Team Docs", "display_name": "Team Docs", "mimeType": "application/vnd.google-apps.folder"}
+        ]
+        client.list_folder.return_value = [
+            {"id": "doc1", "name": "guide.docx", "display_name": "guide.docx", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "size": 2048, "modifiedTime": "2026-01-01T00:00:00Z"}
+        ]
+
+        args = argparse.Namespace(
+            remote_path="Shared with me/Team Docs",
+            limit=50,
+            secrets_file=None,
+            token_file=None,
+        )
+        cmd_dir(args)
+
+        out = capsys.readouterr().out
+        assert "guide.docx" in out
+        client.list_folder.assert_called_with("shared-f1")
+
+
+def test_cmd_dir_my_drive_prefix(capsys):
+    import argparse
+    from unittest.mock import patch
+    from google_drive.cli import cmd_dir
+
+    with patch("google_drive.cli.GoogleDriveClient") as mock_client_cls:
+        client = mock_client_cls.return_value
+        client.resolve_path.return_value = "folder-sub"
+        client.list_folder.return_value = [
+            {"id": "file1", "name": "notes.txt", "display_name": "notes.txt", "mimeType": "text/plain", "size": 100, "modifiedTime": "2026-01-01T00:00:00Z"}
+        ]
+
+        args = argparse.Namespace(
+            remote_path="My Drive/Work",
+            limit=50,
+            secrets_file=None,
+            token_file=None,
+        )
+        cmd_dir(args)
+
+        out = capsys.readouterr().out
+        assert "notes.txt" in out
+        client.resolve_path.assert_called_with("Work")
+

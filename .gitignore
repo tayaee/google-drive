@@ -17,3 +17,4 @@ token.json.*
 # Cache and temporary
 .uv-cache/
 .pytest_cache/
+issues/
