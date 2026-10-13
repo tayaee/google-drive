@@ -6,18 +6,13 @@ A lightweight CLI tool to mount Google Drive ("My Drive" and "Shared with me") a
 
 ### 1. Credentials
 Download your OAuth 2.0 client credentials (`client_secrets.json`) from [Google Cloud Console](https://console.cloud.google.com/) and save it to:
-- **Windows**: `%USERPROFILE%\.config\google-drive\client_secrets.json`
-- **Linux / macOS**: `~/.config/google-drive/client_secrets.json`
+- `%USERPROFILE%\.config\google-drive\client_secrets.json`
 
 *(Generated tokens will also be saved to `token.json` in the same directory.)*
 
 ### 2. Install
-```bash
-# Windows
+```cmd
 .\install.bat
-
-# Linux / macOS
-./install.sh
 
 # Or via uv directly
 uv tool install --force .
